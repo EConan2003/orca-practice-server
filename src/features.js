@@ -64,8 +64,20 @@ function requireOrcaDashboard(features) {
   };
 }
 
+// Detail endpoints expose full specs, message bodies and transcripts (CONTRACT 4.1): socket
+// address only, never a forwarding header.
+const LOOPBACK_ONLY_ERROR = 'details are only available from loopback';
+function requireLoopback(req, res, next) {
+  if (!isLoopback(req.socket.remoteAddress)) {
+    return res.status(403).json({ error: LOOPBACK_ONLY_ERROR });
+  }
+  return next();
+}
+
 module.exports = {
   DISABLED_ERROR,
+  LOOPBACK_ONLY_ERROR,
+  requireLoopback,
   parseFlag,
   isLoopback,
   createFeatures,
