@@ -1,0 +1,4 @@
+# Keep hooks, scripts and lane patterns LF-only; CRLF breaks the shell hook and the regexes.
+*.sh text eol=lf
+.githooks/* text eol=lf
+.orca/** text eol=lf
