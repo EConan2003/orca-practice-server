@@ -3,17 +3,21 @@
 const childProcess = require('node:child_process');
 
 const RUN_ID = /^run_[A-Za-z0-9_]+$/;
-const LIMIT = /^[0-9]{1,3}$/;
+const DISPATCH_ID = /^ctx_[A-Za-z0-9]+$/;
+const LIMIT_100 = /^(100|[1-9][0-9]?)$/;
+const LIMIT_200 = /^(200|1[0-9]{2}|[1-9][0-9]?)$/;
 
-// The only Orca commands the dashboard may run, all read-only, with the flags each one
-// accepts and the pattern its value must match. Anything else is refused before exec.
+// The only Orca commands the dashboard may run, all read-only. `values` are flags that take
+// a value matching the pattern (all required); `booleans` are optional flags with no value.
+// Anything else is refused before exec.
 const ALLOWED = {
-  'run-list': {},
-  'run-show': { '--id': RUN_ID },
-  'task-list': { '--run': RUN_ID },
-  'worker-list': { '--run': RUN_ID },
-  'gate-list': { '--run': RUN_ID },
-  inbox: { '--limit': LIMIT },
+  'run-list': { values: {}, booleans: [] },
+  'run-show': { values: { '--id': RUN_ID }, booleans: [] },
+  'task-list': { values: { '--run': RUN_ID }, booleans: ['--full'] },
+  'worker-list': { values: { '--run': RUN_ID }, booleans: [] },
+  'gate-list': { values: { '--run': RUN_ID }, booleans: [] },
+  inbox: { values: { '--limit': LIMIT_100 }, booleans: ['--full'] },
+  'worker-read': { values: { '--dispatch': DISPATCH_ID, '--limit': LIMIT_200 }, booleans: [] },
 };
 
 class OrcaError extends Error {
@@ -28,16 +32,31 @@ function validate(cmd, args) {
   if (!Object.prototype.hasOwnProperty.call(ALLOWED, cmd)) {
     throw new OrcaError(`orca command not allowed: ${cmd}`, 'command_not_allowed');
   }
-  if (!Array.isArray(args) || args.length % 2 !== 0) {
-    throw new OrcaError('orca arguments must be flag/value pairs', 'bad_arguments');
+  if (!Array.isArray(args)) {
+    throw new OrcaError('orca arguments must be an array', 'bad_arguments');
   }
-  const flags = ALLOWED[cmd];
-  for (let i = 0; i < args.length; i += 2) {
+  const { values, booleans } = ALLOWED[cmd];
+  const seen = new Set();
+  const refuse = (flag) => {
+    throw new OrcaError(`orca argument not allowed: ${cmd} ${flag}`, 'bad_arguments');
+  };
+  for (let i = 0; i < args.length; ) {
     const flag = args[i];
-    const value = args[i + 1];
-    const pattern = Object.prototype.hasOwnProperty.call(flags, flag) ? flags[flag] : null;
-    if (!pattern || typeof value !== 'string' || !pattern.test(value)) {
-      throw new OrcaError(`orca argument not allowed: ${cmd} ${flag}`, 'bad_arguments');
+    if (typeof flag !== 'string' || seen.has(flag)) refuse(flag);
+    seen.add(flag);
+    if (booleans.includes(flag)) {
+      i += 1;
+    } else if (Object.prototype.hasOwnProperty.call(values, flag)) {
+      const value = args[i + 1];
+      if (typeof value !== 'string' || !values[flag].test(value)) refuse(flag);
+      i += 2;
+    } else {
+      refuse(flag);
+    }
+  }
+  for (const flag of Object.keys(values)) {
+    if (!seen.has(flag)) {
+      throw new OrcaError(`orca argument missing: ${cmd} ${flag}`, 'bad_arguments');
     }
   }
 }
@@ -90,4 +109,4 @@ function createOrcaRunner({
   };
 }
 
-module.exports = { ALLOWED, RUN_ID, OrcaError, createOrcaRunner };
+module.exports = { ALLOWED, RUN_ID, DISPATCH_ID, OrcaError, createOrcaRunner };
