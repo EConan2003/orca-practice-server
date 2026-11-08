@@ -69,11 +69,28 @@ at runtime without a restart. Runtime state is in memory and resets on restart.
 | GET | `/api/orca/runs` | - | `200 {"source": "live", "runs": [...]}` or `200 {"source": "unavailable", "error": "...", "runs": []}` |
 | GET | `/api/orca/runs/:id` | - | `200 {"source", "run", "tasks", "workers", "gates"}`; `404` for an unknown run |
 | GET | `/api/orca/inbox` | `?limit=<1-100>` (default 50) | `200 {"source", "messages": [...]}` |
+| GET | `/api/orca/learn` | - | `200 {"lifecycle": [...], "glossary": [...], "states": {...}}` static teaching content (see 4.2) |
+| GET | `/api/orca/runs/:id/timeline` | - | `200 {"source", "events": [{"at", "kind", "title", "taskId"?, "messageId"?, "lane"?, ...}]}` oldest first; `404` for an unknown run |
+| GET | `/api/orca/runs/:id/tasks/:taskId` | - | `200 {"source", "task": {"id", "title", "status", "deps", "parentId", "spec", "result", "createdAt", "completedAt"}}`; `404` if the task is not in the run; loopback only (`403` otherwise) |
+| GET | `/api/orca/messages/:id` | - | `200 {"source", "message": {"id", "runId", "type", "from", "to", "subject", "priority", "body", "payload", "createdAt", "deliveredAt"}}`; `404` if unknown; loopback only |
+| GET | `/api/orca/workers/:dispatchId/output` | `?limit=<1-200>` (default 50) | `200 {"source", "dispatchId", "outputSource", "entries": [...]}` recent worker output; loopback only |
 
 Every `/dashboard` and `/api/orca/*` route returns `404 {"error":"orca dashboard is disabled"}`
 while the flag is off. The dashboard is read-only: it never runs a mutating Orca command. When
 the Orca CLI is missing or fails (as in the container), `/api/orca/*` still return 200 with
 `"source": "unavailable"` and the error, and the page shows that state; `/health` is unaffected.
+
+Path ids are validated before use: run `^run_[A-Za-z0-9_]+$`, task `^task_[A-Za-z0-9]+$`, message
+`^msg_[A-Za-z0-9_]+$`, dispatch `^ctx_[A-Za-z0-9]+$`; anything else gives `400`. "Loopback only"
+uses the socket address, as for `PUT /api/features/orca-dashboard`, because full task specs,
+message bodies and worker transcripts can contain commands and paths.
+
+### 4.2 Dashboard views
+
+`/dashboard` has three views: **Live** (run state, as before), **History** (the run timeline from
+`/api/orca/runs/:id/timeline`, filterable by event kind and lane) and **Learn** (the Orca
+lifecycle, glossary and state meanings from `/api/orca/learn`, each linked to real examples from
+the selected run). Tasks, workers and messages in every view open a read-only detail panel.
 
 ## 5. Container image and release
 

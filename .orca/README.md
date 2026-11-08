@@ -16,6 +16,7 @@ in separate Orca worktrees, building a Node 22 API and releasing it through GitH
 | specs/F1-feature.md | Cross-lane /version feature, orchestrator steps | orchestrator |
 | specs/BF1.md, specs/DF1.md | F1 lane tasks | build, deploy |
 | specs/F2-dashboard.md | Orca dashboard behind a feature flag | dashboard worktree (build paths) |
+| specs/F3-dashboard-learn.md | Dashboard v2: learn mode, details, history | dashboard worktree (build paths) |
 | ROUTING.md | Which lane owns which failure | Copied into CONTRACT.md |
 | lane-guard.sh | Pre-commit hook blocking out-of-lane commits | Installed as .githooks/pre-commit |
 | drills.md | Scenarios that test the rules | You, after v0.1.0 |
