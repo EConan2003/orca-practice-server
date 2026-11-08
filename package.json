@@ -1,0 +1,24 @@
+{
+  "name": "orca-practice-server",
+  "version": "1.0.0",
+  "description": "A small Node 22 Express API",
+  "private": true,
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "express": "^4.22.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.14.0",
+    "supertest": "^7.3.2"
+  }
+}
