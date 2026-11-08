@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orca dashboard</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #f0f2f5;
+    --text: #1b1f24;
+    --muted: #5d6673;
+    --border: #d9dde3;
+    --accent: #2459d6;
+    --ok: #1a7f37;
+    --ok-bg: #dcf3e2;
+    --info: #1f5fbf;
+    --info-bg: #dde9fb;
+    --warn: #9a6200;
+    --warn-bg: #fbefd5;
+    --bad: #c4291f;
+    --bad-bg: #fbe0dd;
+    --neutral: #57606a;
+    --neutral-bg: #e8ebef;
+    --edge: #8c96a3;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1216;
+      --panel: #171b21;
+      --panel-2: #1e232b;
+      --text: #e4e8ee;
+      --muted: #98a2b0;
+      --border: #2c333d;
+      --accent: #7aa7ff;
+      --ok: #5fd07e;
+      --ok-bg: #133321;
+      --info: #82b1ff;
+      --info-bg: #172a4a;
+      --warn: #f0b54a;
+      --warn-bg: #3a2b0d;
+      --bad: #ff7b72;
+      --bad-bg: #431a17;
+      --neutral: #a8b1bd;
+      --neutral-bg: #262c35;
+      --edge: #6b7584;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+  }
+  header h1 { font-size: 17px; margin: 0 8px 0 0; }
+  header .spacer { flex: 1; }
+  main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+  main > * { min-width: 0; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    min-width: 0;
+  }
+  section > h2 { font-size: 15px; margin: 0 0 10px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  section > h2 .sub { font-size: 12px; font-weight: normal; color: var(--muted); }
+  .two { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); }
+  label { color: var(--muted); font-size: 12px; display: inline-flex; gap: 6px; align-items: center; }
+  select, button {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; max-width: 100%;
+  }
+  button { cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
+  code, .mono { font-family: var(--mono); font-size: 12px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 999px; padding: 1px 9px; font-size: 12px; font-weight: 600;
+    background: var(--neutral-bg); color: var(--neutral); white-space: nowrap;
+  }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .pill.plain::before { display: none; }
+  .t-ok { background: var(--ok-bg); color: var(--ok); }
+  .t-info { background: var(--info-bg); color: var(--info); }
+  .t-warn { background: var(--warn-bg); color: var(--warn); }
+  .t-bad { background: var(--bad-bg); color: var(--bad); }
+  .t-neutral { background: var(--neutral-bg); color: var(--neutral); }
+  .banner {
+    border-radius: 8px; padding: 10px 12px; border: 1px solid var(--border);
+    background: var(--warn-bg); color: var(--text);
+  }
+  .banner.bad { background: var(--bad-bg); }
+  .banner[hidden] { display: none; }
+
+  /* Flag panel */
+  .cmds { display: grid; gap: 6px; margin-top: 8px; }
+  .cmd {
+    font-family: var(--mono); font-size: 12px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+    overflow-x: auto; white-space: pre;
+  }
+
+  /* Tiles */
+  .tiles { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
+  .tile { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .tile .k { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .tile .v { font-size: 28px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .tile .break { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+
+  /* DAG */
+  .dag-scroll { overflow-x: auto; padding-bottom: 4px; }
+  .dag { position: relative; display: flex; gap: 48px; align-items: flex-start; min-width: min-content; padding: 4px 2px; }
+  .dag svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+  .dag-col { display: grid; gap: 12px; width: 230px; flex: none; position: relative; z-index: 1; }
+  .dag-col > .depth { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .node {
+    background: var(--panel-2); border: 1px solid var(--border); border-left-width: 4px;
+    border-radius: 8px; padding: 8px 10px; display: grid; gap: 4px;
+  }
+  .node .title { font-weight: 600; overflow-wrap: anywhere; }
+  .node .meta { font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+  .node.s-ok { border-left-color: var(--ok); }
+  .node.s-info { border-left-color: var(--info); }
+  .node.s-warn { border-left-color: var(--warn); }
+  .node.s-bad { border-left-color: var(--bad); }
+  .node.s-neutral { border-left-color: var(--neutral); }
+
+  /* Tables */
+  .table-scroll { overflow-x: auto; }
+  /* Below this width the table scrolls inside its wrapper instead of wrapping letter by letter. */
+  table { border-collapse: collapse; width: 100%; min-width: 820px; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; white-space: nowrap; }
+
+  /* Messages */
+  .timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 560px; overflow-y: auto; }
+  .msg { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); }
+  .msg.unhandled { border-color: var(--warn); }
+  .msg .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .msg .subject { font-weight: 600; overflow-wrap: anywhere; }
+  .msg .route { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+  .msg details { margin-top: 4px; }
+  .msg summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+  .msg pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 6px 0 0; font-family: var(--mono); font-size: 12px; }
+
+  /* Lanes / gates / catalog */
+  .cards { display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+  .card { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); display: grid; gap: 6px; align-content: start; min-width: 0; }
+  .card h3 { font-size: 14px; margin: 0; display: flex; gap: 6px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+  .card p { margin: 0; font-size: 13px; }
+  .card ul { margin: 0; padding-left: 18px; font-size: 12px; }
+  .card ul code { overflow-wrap: anywhere; }
+  .catalog { grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); }
+  .empty { color: var(--muted); font-style: italic; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 24px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Orca dashboard</h1>
+  <label>Run <select id="run-picker" aria-label="Run"></select></label>
+  <span id="flag-pill" class="pill">flag …</span>
+  <span id="source-pill" class="pill">source …</span>
+  <span class="spacer"></span>
+  <span id="updated" class="muted small"></span>
+  <button id="refresh" type="button">Refresh</button>
+  <button id="pause" type="button" aria-pressed="false">Pause auto-refresh</button>
+</header>
+
+<main>
+  <div id="banner" class="banner" role="status" hidden></div>
+
+  <section aria-labelledby="h-flag">
+    <h2 id="h-flag">Feature flag <span class="sub">orcaDashboard</span></h2>
+    <div id="flag-text"></div>
+    <div class="cmds">
+      <div class="muted small">Turn it off at runtime (loopback only):</div>
+      <div id="cmd-off" class="cmd"></div>
+      <div class="muted small">Turn it back on at runtime, or enable it at startup:</div>
+      <div id="cmd-on" class="cmd"></div>
+      <div class="cmd">ORCA_DASHBOARD=on npm start</div>
+    </div>
+  </section>
+
+  <div class="tiles" id="tiles" aria-label="Summary"></div>
+
+  <section aria-labelledby="h-dag">
+    <h2 id="h-dag">Task DAG <span class="sub">tasks grouped by dependency depth; arrows point from a dependency to the task that waits for it</span></h2>
+    <div class="dag-scroll"><div id="dag" class="dag"></div></div>
+  </section>
+
+  <section aria-labelledby="h-workers">
+    <h2 id="h-workers">Workers and dispatches</h2>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Dispatch</th><th>Task</th><th>Agent</th><th>State</th><th>Outcome</th>
+          <th>Liveness</th><th>Terminal</th><th>Lane</th>
+        </tr></thead>
+        <tbody id="workers"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="two">
+    <section aria-labelledby="h-msgs">
+      <h2 id="h-msgs">Messages <span class="sub" id="msgs-sub"></span></h2>
+      <ul id="messages" class="timeline"></ul>
+    </section>
+    <div style="display:grid;gap:16px;align-content:start;min-width:0">
+      <section aria-labelledby="h-gates">
+        <h2 id="h-gates">Decision gates</h2>
+        <div id="gates" class="cards"></div>
+      </section>
+      <section aria-labelledby="h-lanes">
+        <h2 id="h-lanes">Lanes <span class="sub">from worker workspaces; the pre-commit lane guard enforces .orca/lanes/&lt;lane&gt;.allow</span></h2>
+        <div id="lanes" class="cards"></div>
+      </section>
+    </div>
+  </div>
+
+  <section aria-labelledby="h-catalog">
+    <h2 id="h-catalog">Orca orchestration features <span class="sub" id="catalog-sub"></span></h2>
+    <div id="catalog" class="cards catalog"></div>
+  </section>
+</main>
+<footer>Read-only view of <code>orca orchestration … --json</code>. Refreshes every 5 s.</footer>
+
+<script>
+'use strict';
+(function () {
+  var REFRESH_MS = 5000;
+  var state = {
+    paused: false,
+    timer: null,
+    inFlight: false,
+    runId: null,
+    runs: [],
+    catalog: null,
+    detail: null,
+    inbox: null,
+    flag: null,
+  };
+
+  // ---- DOM helpers: Orca strings only ever become text nodes or attribute values ----
+  function el(tag, props) {
+    var node = document.createElement(tag);
+    if (props) {
+      Object.keys(props).forEach(function (k) {
+        var v = props[k];
+        if (v === undefined || v === null || v === false) return;
+        if (k === 'text') node.textContent = String(v);
+        else if (k === 'className') node.className = v;
+        else node.setAttribute(k, String(v));
+      });
+    }
+    for (var i = 2; i < arguments.length; i++) append(node, arguments[i]);
+    return node;
+  }
+  function append(node, child) {
+    if (child === undefined || child === null || child === false) return;
+    if (Array.isArray(child)) { child.forEach(function (c) { append(node, c); }); return; }
+    node.appendChild(typeof child === 'object' ? child : document.createTextNode(String(child)));
+  }
+  function $(id) { return document.getElementById(id); }
+  function str(v) { return v === undefined || v === null ? '' : String(v); }
+
+  function tone(value) {
+    var v = str(value).toLowerCase();
+    if (/^(completed|succeeded|success|done|live|resolved|approved|handled|ok|on)$/.test(v)) return 'ok';
+    if (/^(dispatched|ready|running|in_progress|active|starting|retained|worker_done|status|reply)$/.test(v)) return 'info';
+    if (/^(pending|blocked|waiting|question|unverifiable|open|stale|high)$/.test(v)) return 'warn';
+    if (/^(failed|failure|error|escalation|dead|abandoned|stopped|rejected|cancelled|canceled|unavailable|off|outcome_unknown|urgent)$/.test(v)) return 'bad';
+    return 'neutral';
+  }
+  function pill(text, toneOverride, plain) {
+    return el('span', { className: 'pill t-' + (toneOverride || tone(text)) + (plain ? ' plain' : ''), text: str(text) || '—' });
+  }
+  function shortId(id) {
+    var s = str(id);
+    var m = /^(term_[0-9a-f]{8})[0-9a-f-]{20,}$/i.exec(s);
+    return m ? m[1] + '…' : s;
+  }
+  function laneOf(workspace) {
+    var s = str(workspace);
+    var i = s.indexOf('::');
+    var p = (i >= 0 ? s.slice(i + 2) : s).split(/[\\/]+/).filter(Boolean);
+    return p.length ? p[p.length - 1] : '';
+  }
+  function countBy(list, key) {
+    var out = {};
+    list.forEach(function (x) { var k = str(x && x[key]) || 'unknown'; out[k] = (out[k] || 0) + 1; });
+    return out;
+  }
+  function isOpenGate(g) {
+    var s = str(g && (g.status || g.state)).toLowerCase();
+    return !/^(resolved|closed|cancelled|canceled|approved|rejected)$/.test(s);
+  }
+
+  // ---- data ----
+  function getJSON(url) {
+    return fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (body) { return { status: r.status, body: body }; });
+    });
+  }
+
+  function pickRun(runs) {
+    var fromHash = decodeURIComponent((location.hash.match(/run=([^&]+)/) || [])[1] || '');
+    var ids = runs.map(function (r) { return r.id; });
+    if (fromHash && ids.indexOf(fromHash) >= 0) return fromHash;
+    if (state.runId && ids.indexOf(state.runId) >= 0) return state.runId;
+    var first = runs.filter(function (r) { return !r.legacy; })[0] || runs[0];
+    return first ? first.id : null;
+  }
+
+  function refresh() {
+    if (state.inFlight) return Promise.resolve();
+    state.inFlight = true;
+    var jobs = [getJSON('/api/features'), getJSON('/api/orca/runs'), getJSON('/api/orca/inbox?limit=50')];
+    if (!state.catalog) jobs.push(getJSON('/api/orca/features'));
+    return Promise.all(jobs).then(function (res) {
+      state.flag = res[0].body && res[0].body.orcaDashboard ? res[0].body.orcaDashboard.enabled : null;
+      if (res[1].status === 404) { renderDisabled(); return; }
+      var runsRes = res[1].body || {};
+      state.runs = Array.isArray(runsRes.runs) ? runsRes.runs : [];
+      state.runsSource = runsRes.source;
+      state.runsError = runsRes.error;
+      state.inbox = res[2].status === 200 ? res[2].body : null;
+      if (res[3] && res[3].status === 200 && Array.isArray(res[3].body)) state.catalog = res[3].body;
+      state.runId = pickRun(state.runs);
+      if (!state.runId) { state.detail = null; return; }
+      return getJSON('/api/orca/runs/' + encodeURIComponent(state.runId)).then(function (d) {
+        if (d.status === 404 && d.body && d.body.error === 'orca dashboard is disabled') { renderDisabled(); return; }
+        state.detail = d.status === 200 ? d.body : { source: 'unavailable', error: (d.body && d.body.error) || ('HTTP ' + d.status), tasks: [], workers: [], gates: [] };
+      });
+    }).then(function () {
+      if (!state.disabled) render();
+    }).catch(function (err) {
+      showBanner('Could not reach the server: ' + (err && err.message ? err.message : err), true);
+    }).then(function () {
+      state.inFlight = false;
+    });
+  }
+
+  function schedule() {
+    clearInterval(state.timer);
+    state.timer = state.paused ? null : setInterval(refresh, REFRESH_MS);
+  }
+
+  // ---- rendering ----
+  function showBanner(text, bad) {
+    var b = $('banner');
+    b.className = 'banner' + (bad ? ' bad' : '');
+    b.textContent = text;
+    b.hidden = !text;
+  }
+
+  function renderDisabled() {
+    state.disabled = true;
+    $('flag-pill').replaceChildren(document.createTextNode('flag off'));
+    $('flag-pill').className = 'pill t-bad';
+    showBanner('The orcaDashboard flag was turned off. Turn it back on (see the command below) and reload this page.', true);
+    renderFlag();
+    clearInterval(state.timer);
+  }
+
+  function renderHeader() {
+    var picker = $('run-picker');
+    var current = picker.value;
+    picker.replaceChildren.apply(picker, state.runs.map(function (r) {
+      var label = str(r.id) + (r.objective ? ' — ' + str(r.objective) : '') + (r.legacy ? ' (legacy)' : '');
+      return el('option', { value: str(r.id), text: label });
+    }));
+    if (!state.runs.length) picker.appendChild(el('option', { value: '', text: 'no runs' }));
+    if (state.runId) picker.value = state.runId; else if (current) picker.value = current;
+
+    var fp = $('flag-pill');
+    fp.className = 'pill t-' + (state.flag ? 'ok' : 'bad');
+    fp.textContent = 'flag ' + (state.flag ? 'on' : 'off');
+
+    var source = state.detail && state.detail.source === 'unavailable' ? 'unavailable' : state.runsSource || 'unknown';
+    var sp = $('source-pill');
+    sp.className = 'pill t-' + (source === 'live' ? 'ok' : 'bad');
+    sp.textContent = 'source ' + source;
+    sp.title = source === 'live' ? 'Live data from the Orca CLI' : 'Orca CLI unavailable';
+
+    var err = state.runsError || (state.detail && state.detail.error);
+    showBanner(source === 'live' ? '' : 'Orca CLI unavailable: ' + str(err || 'unknown error') + '. Showing the static feature catalog only.', false);
+    $('updated').textContent = 'updated ' + new Date().toLocaleTimeString();
+  }
+
+  function renderFlag() {
+    var origin = location.protocol + '//' + location.host;
+    $('flag-text').replaceChildren(
+      el('span', null, 'Current state: ', pill(state.flag ? 'on' : 'off'), ' ',
+        el('span', { className: 'muted small', text: 'Runtime changes are in memory and reset on restart; the initial state comes from ORCA_DASHBOARD.' })));
+    $('cmd-off').textContent = 'curl -X PUT -H "Content-Type: application/json" -d \'{"enabled":false}\' ' + origin + '/api/features/orca-dashboard';
+    $('cmd-on').textContent = 'curl -X PUT -H "Content-Type: application/json" -d \'{"enabled":true}\' ' + origin + '/api/features/orca-dashboard';
+  }
+
+  function tile(label, value, breakdown) {
+    var keys = breakdown ? Object.keys(breakdown).sort() : [];
+    return el('div', { className: 'tile' },
+      el('div', { className: 'k', text: label }),
+      el('div', { className: 'v', text: value }),
+      keys.length ? el('div', { className: 'break' }, keys.map(function (k) { return pill(k + ' ' + breakdown[k], tone(k)); })) : null);
+  }
+
+  function data() {
+    var d = state.detail || {};
+    return {
+      tasks: Array.isArray(d.tasks) ? d.tasks : [],
+      workers: Array.isArray(d.workers) ? d.workers : [],
+      gates: Array.isArray(d.gates) ? d.gates : [],
+      messages: state.inbox && Array.isArray(state.inbox.messages) ? state.inbox.messages : [],
+    };
+  }
+
+  function renderTiles(x) {
+    var unhandled = x.messages.filter(function (m) { return !m.handled; });
+    var openGates = x.gates.filter(isOpenGate);
+    $('tiles').replaceChildren(
+      tile('Tasks', x.tasks.length, countBy(x.tasks, 'status')),
+      tile('Workers', x.workers.length, countBy(x.workers, 'state')),
+      tile('Open gates', openGates.length, x.gates.length ? { total: x.gates.length } : null),
+      tile('Unhandled messages', unhandled.length, countBy(unhandled, 'type')));
+  }
+
+  function taskDepths(tasks) {
+    var byId = {};
+    tasks.forEach(function (t) { byId[t.id] = t; });
+    var memo = {};
+    function depth(id, seen) {
+      if (memo[id] !== undefined) return memo[id];
+      if (seen[id]) return 0; // cycle guard
+      seen[id] = true;
+      var deps = (byId[id] && Array.isArray(byId[id].deps) ? byId[id].deps : []).filter(function (d) { return byId[d]; });
+      var dpt = deps.length ? 1 + Math.max.apply(null, deps.map(function (d) { return depth(d, seen); })) : 0;
+      memo[id] = dpt;
+      return dpt;
+    }
+    tasks.forEach(function (t) { depth(t.id, {}); });
+    return memo;
+  }
+
+  function renderDag(x) {
+    var dag = $('dag');
+    if (!x.tasks.length) { dag.replaceChildren(el('p', { className: 'empty', text: 'No tasks in this run.' })); return; }
+    var byId = {};
+    x.tasks.forEach(function (t) { byId[t.id] = t; });
+    var workerByTask = {};
+    x.workers.forEach(function (w) { workerByTask[w.taskId] = w; });
+    var depths = taskDepths(x.tasks);
+    var cols = [];
+    x.tasks.forEach(function (t) { var d = depths[t.id] || 0; (cols[d] = cols[d] || []).push(t); });
+
+    var nodes = {};
+    var columns = cols.map(function (col, i) {
+      return el('div', { className: 'dag-col' },
+        el('div', { className: 'depth', text: 'Depth ' + i + (i === 0 ? ' (no deps)' : '') }),
+        (col || []).map(function (t) {
+          var w = workerByTask[t.id];
+          var deps = Array.isArray(t.deps) ? t.deps : [];
+          var node = el('div', { className: 'node s-' + tone(t.status), 'data-id': str(t.id) },
+            el('div', { className: 'title', text: t.title || t.id }),
+            el('div', null, pill(t.status)),
+            el('div', { className: 'meta mono', text: str(t.id) }),
+            t.dispatchId ? el('div', { className: 'meta', text: 'dispatch ' + str(t.dispatchId) + (w && w.lane ? ' · lane ' + str(w.lane) : '') }) : null,
+            deps.length ? el('div', { className: 'meta', text: 'needs: ' + deps.map(function (d) { return byId[d] ? str(byId[d].title || d) : str(d) + ' (other run)'; }).join(', ') }) : null);
+          nodes[t.id] = node;
+          return node;
+        }));
+    });
+    var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('aria-hidden', 'true');
+    dag.replaceChildren.apply(dag, [svg].concat(columns));
+    drawEdges(dag, svg, x.tasks, nodes);
+  }
+
+  function drawEdges(dag, svg, tasks, nodes) {
+    var ns = 'http://www.w3.org/2000/svg';
+    var box = dag.getBoundingClientRect();
+    svg.setAttribute('width', dag.scrollWidth);
+    svg.setAttribute('height', dag.scrollHeight);
+    var defs = document.createElementNS(ns, 'defs');
+    var marker = document.createElementNS(ns, 'marker');
+    marker.setAttribute('id', 'arrow');
+    marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refX', '9'); marker.setAttribute('refY', '5');
+    marker.setAttribute('markerWidth', '7'); marker.setAttribute('markerHeight', '7');
+    marker.setAttribute('orient', 'auto-start-reverse');
+    var tip = document.createElementNS(ns, 'path');
+    tip.setAttribute('d', 'M0,0 L10,5 L0,10 z');
+    tip.setAttribute('fill', 'var(--edge)');
+    marker.appendChild(tip); defs.appendChild(marker); svg.appendChild(defs);
+    tasks.forEach(function (t) {
+      (Array.isArray(t.deps) ? t.deps : []).forEach(function (d) {
+        var a = nodes[d], b = nodes[t.id];
+        if (!a || !b) return;
+        var ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect();
+        var x1 = ra.right - box.left, y1 = ra.top + ra.height / 2 - box.top;
+        var x2 = rb.left - box.left - 2, y2 = rb.top + rb.height / 2 - box.top;
+        var mx = (x1 + x2) / 2;
+        var p = document.createElementNS(ns, 'path');
+        p.setAttribute('d', 'M' + x1 + ',' + y1 + ' C' + mx + ',' + y1 + ' ' + mx + ',' + y2 + ' ' + x2 + ',' + y2);
+        p.setAttribute('fill', 'none');
+        p.setAttribute('stroke', 'var(--edge)');
+        p.setAttribute('stroke-width', '1.5');
+        p.setAttribute('marker-end', 'url(#arrow)');
+        svg.appendChild(p);
+      });
+    });
+  }
+
+  function renderWorkers(x) {
+    var titles = {};
+    x.tasks.forEach(function (t) { titles[t.id] = t.title; });
+    var rows = x.workers.map(function (w) {
+      var attention = Array.isArray(w.attention) && w.attention.length ? ' (attention: ' + w.attention.map(str).join(', ') + ')' : '';
+      return el('tr', null,
+        el('td', { className: 'mono', text: w.dispatchId }),
+        el('td', null, el('div', { text: titles[w.taskId] || '' }), el('div', { className: 'mono muted', text: w.taskId })),
+        el('td', { text: w.agent || '—' }),
+        el('td', null, pill(w.state)),
+        el('td', { text: w.outcome || '—' }),
+        el('td', null, pill(w.liveness), attention ? el('div', { className: 'small muted', text: attention }) : null),
+        el('td', null, pill(w.terminalState || 'none', null, true), w.terminal ? el('div', { className: 'mono muted small', title: str(w.terminal), text: shortId(w.terminal) }) : null),
+        el('td', { title: str(w.workspace), text: w.lane || laneOf(w.workspace) || '—' }));
+    });
+    if (!rows.length) rows = [el('tr', null, el('td', { colspan: 8, className: 'empty', text: 'No workers in this run.' }))];
+    $('workers').replaceChildren.apply($('workers'), rows);
+  }
+
+  function renderMessages(x) {
+    var laneByTerminal = {};
+    x.workers.forEach(function (w) { if (w.terminal) laneByTerminal[w.terminal] = w.lane || laneOf(w.workspace); });
+    function who(h) {
+      var lane = laneByTerminal[h];
+      return lane ? lane + ' (' + shortId(h) + ')' : shortId(h);
+    }
+    var list = $('messages');
+    var unavailable = state.inbox && state.inbox.source === 'unavailable';
+    $('msgs-sub').textContent = unavailable ? 'unavailable' : x.messages.length + ' most recent across all recipients';
+    if (!x.messages.length) {
+      list.replaceChildren(el('li', { className: 'empty', text: unavailable ? 'Inbox unavailable.' : 'No messages.' }));
+      return;
+    }
+    list.replaceChildren.apply(list, x.messages.map(function (m) {
+      return el('li', { className: 'msg' + (m.handled ? '' : ' unhandled') },
+        el('div', { className: 'row' },
+          pill(m.type),
+          m.priority ? pill(m.priority, null, true) : null,
+          pill(m.handled ? 'handled' : 'unhandled', m.handled ? 'ok' : 'warn', true),
+          el('span', { className: 'subject', text: m.subject || '(no subject)' })),
+        el('div', { className: 'route', title: str(m.from) + ' → ' + str(m.to), text: who(m.from) + ' → ' + who(m.to) }),
+        m.body ? el('details', null, el('summary', { text: 'body · ' + str(m.id) }), el('pre', { text: m.body })) : null);
+    }));
+  }
+
+  function renderGates(x) {
+    var box = $('gates');
+    if (!x.gates.length) { box.replaceChildren(el('p', { className: 'empty', text: 'No decision gates in this run.' })); return; }
+    box.replaceChildren.apply(box, x.gates.map(function (g) {
+      var status = g.status || g.state || (isOpenGate(g) ? 'pending' : 'resolved');
+      var options = Array.isArray(g.options) ? g.options.map(str).join(' / ') : '';
+      return el('div', { className: 'card' },
+        el('h3', null, el('span', { className: 'mono', text: g.id || 'gate' }), pill(status)),
+        el('p', { text: g.question || g.subject || '' }),
+        g.taskId || g.task ? el('div', { className: 'small muted', text: 'blocks ' + str(g.taskId || g.task) }) : null,
+        options ? el('div', { className: 'small muted', text: 'options: ' + options }) : null,
+        g.resolution || g.answer ? el('div', { className: 'small', text: 'resolution: ' + str(g.resolution || g.answer) }) : null);
+    }));
+  }
+
+  function lanes(x) {
+    var out = {};
+    x.workers.forEach(function (w) {
+      var name = w.lane || laneOf(w.workspace) || 'unknown';
+      var l = out[name] || (out[name] = { name: name, path: '', workers: [] });
+      var s = str(w.workspace), i = s.indexOf('::');
+      l.path = i >= 0 ? s.slice(i + 2) : s;
+      l.workers.push(w);
+    });
+    return Object.keys(out).sort().map(function (k) { return out[k]; });
+  }
+
+  function renderLanes(x) {
+    var box = $('lanes');
+    var ls = lanes(x);
+    if (!ls.length) { box.replaceChildren(el('p', { className: 'empty', text: 'No lane worktrees with workers in this run.' })); return; }
+    box.replaceChildren.apply(box, ls.map(function (l) {
+      var active = l.workers.filter(function (w) { return !/^(succeeded|failed|abandoned|stopped|released)$/.test(str(w.state)); });
+      return el('div', { className: 'card' },
+        el('h3', null, el('span', { text: l.name }), pill(active.length ? 'active' : 'idle', active.length ? 'info' : 'neutral')),
+        el('div', { className: 'mono small muted', text: l.path }),
+        el('ul', null, l.workers.map(function (w) {
+          return el('li', null, el('code', { text: w.dispatchId }), ' ', str(w.state), w.agent ? ' · ' + str(w.agent) : '');
+        })));
+    }));
+  }
+
+  function liveCounts(x) {
+    var unavailable = !state.detail || state.detail.source !== 'live';
+    var unhandled = x.messages.filter(function (m) { return !m.handled; }).length;
+    var c = {
+      runs: state.runsSource === 'live' ? state.runs.length + ' runs' : null,
+      tasks: unavailable ? null : x.tasks.length + ' tasks · ' + x.tasks.filter(function (t) { return t.status === 'completed'; }).length + ' completed',
+      workers: unavailable ? null : x.workers.length + ' dispatches · ' + x.workers.filter(function (w) { return w.liveness === 'live'; }).length + ' live',
+      messages: state.inbox && state.inbox.source === 'live' ? x.messages.length + ' messages · ' + unhandled + ' unhandled' : null,
+      gates: unavailable ? null : x.gates.filter(isOpenGate).length + ' open · ' + x.gates.length + ' total',
+      lanes: unavailable ? null : lanes(x).length + ' lanes in use',
+    };
+    return c;
+  }
+
+  function renderCatalog(x) {
+    var box = $('catalog');
+    var cat = state.catalog || [];
+    $('catalog-sub').textContent = cat.length + ' features';
+    var counts = liveCounts(x);
+    box.replaceChildren.apply(box, cat.map(function (f) {
+      var count = f.live ? counts[f.live] : null;
+      return el('div', { className: 'card' },
+        el('h3', null, el('span', { text: f.name }), count ? pill(count, 'ok') : pill(f.live ? 'no live data' : 'static', 'neutral', true)),
+        el('div', { className: 'small muted', text: f.category }),
+        el('p', { text: f.description }),
+        el('ul', null, (Array.isArray(f.commands) ? f.commands : []).map(function (c) { return el('li', null, el('code', { text: c })); })));
+    }));
+  }
+
+  function render() {
+    var x = data();
+    renderHeader();
+    renderFlag();
+    renderTiles(x);
+    renderDag(x);
+    renderWorkers(x);
+    renderMessages(x);
+    renderGates(x);
+    renderLanes(x);
+    renderCatalog(x);
+  }
+
+  // ---- events ----
+  $('run-picker').addEventListener('change', function (e) {
+    state.runId = e.target.value || null;
+    history.replaceState(null, '', state.runId ? '#run=' + encodeURIComponent(state.runId) : '#');
+    refresh();
+  });
+  $('refresh').addEventListener('click', function () { refresh(); });
+  $('pause').addEventListener('click', function (e) {
+    state.paused = !state.paused;
+    e.target.setAttribute('aria-pressed', String(state.paused));
+    e.target.textContent = state.paused ? 'Resume auto-refresh' : 'Pause auto-refresh';
+    schedule();
+  });
+  var resizeTimer;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { if (state.detail) renderDag(data()); }, 150);
+  });
+
+  refresh();
+  schedule();
+})();
+</script>
+</body>
+</html>
