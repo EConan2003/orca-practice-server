@@ -1,0 +1,16 @@
+# Only package*.json and src/ are needed in the image.
+.git
+.github
+.githooks
+.orca
+node_modules
+coverage
+test
+deploy
+.env
+.env.*
+*.log
+*.md
+.DS_Store
+Dockerfile
+.dockerignore
