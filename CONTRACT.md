@@ -33,13 +33,15 @@ are `dependencies`.
 |---|---|---|
 | `PORT` | `3000` | TCP port the HTTP server listens on (all interfaces) |
 | `NODE_ENV` | unset | Standard Node meaning; the image sets `production` |
+| `ORCA_DASHBOARD` | `off` | Initial state of the Orca dashboard feature flag: `on`/`true`/`1` enable it, anything else disables it (see 4.1) |
+| `ORCA_CLI` | `orca` | Orca CLI executable the dashboard runs (read-only `orca orchestration ... --json` commands) |
 
 No other env vars are read. No secrets are needed at runtime. `.env.example` (build lane) lists
 these variables with their defaults.
 
 ## 4. HTTP API
 
-All responses are JSON (`Content-Type: application/json`).
+All responses are JSON (`Content-Type: application/json`), except `GET /dashboard` (HTML, section 4.1).
 
 | Method | Path | Request | Response |
 |---|---|---|---|
@@ -49,6 +51,29 @@ All responses are JSON (`Content-Type: application/json`).
 | POST | `/api/items` | invalid body (missing, empty or non-string `name`) | `400 {"error": "<message>"}` |
 
 `/health` is the liveness endpoint used by the Docker `HEALTHCHECK`, `deploy/smoke.sh` and CI.
+
+### 4.1 Feature flags and the Orca dashboard
+
+The Orca dashboard is a feature of this server that shows every Orca orchestration feature
+(runs, tasks and their DAG, workers/dispatches, messages, decision gates, lanes, merge gate,
+issue routing) with live state read from the Orca CLI. It is behind the feature flag
+`orcaDashboard`. Its initial state comes from `ORCA_DASHBOARD` (default off); it can be toggled
+at runtime without a restart. Runtime state is in memory and resets on restart.
+
+| Method | Path | Request | Response |
+|---|---|---|---|
+| GET | `/api/features` | - | `200 {"orcaDashboard": {"enabled": <bool>}}` (always available) |
+| PUT | `/api/features/orca-dashboard` | `{"enabled": <bool>}` | `200 {"orcaDashboard": {"enabled": <bool>}}`; `400` if `enabled` is not a boolean; `403 {"error": ...}` unless the request comes from a loopback address |
+| GET | `/dashboard` | - | `200` HTML page (the only non-JSON response); `404 {"error":"orca dashboard is disabled"}` when off |
+| GET | `/api/orca/features` | - | `200 [{"id", "name", "category", "description", "commands": [...]}...]` static catalog of Orca orchestration features |
+| GET | `/api/orca/runs` | - | `200 {"source": "live", "runs": [...]}` or `200 {"source": "unavailable", "error": "...", "runs": []}` |
+| GET | `/api/orca/runs/:id` | - | `200 {"source", "run", "tasks", "workers", "gates"}`; `404` for an unknown run |
+| GET | `/api/orca/inbox` | `?limit=<1-100>` (default 50) | `200 {"source", "messages": [...]}` |
+
+Every `/dashboard` and `/api/orca/*` route returns `404 {"error":"orca dashboard is disabled"}`
+while the flag is off. The dashboard is read-only: it never runs a mutating Orca command. When
+the Orca CLI is missing or fails (as in the container), `/api/orca/*` still return 200 with
+`"source": "unavailable"` and the error, and the page shows that state; `/health` is unaffected.
 
 ## 5. Container image and release
 

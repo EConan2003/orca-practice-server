@@ -19,11 +19,12 @@ function freePort() {
   });
 }
 
-test('server listens on PORT and serves /health', async (t) => {
+// Starts src/server.js in a child process with extra env vars; resolves with its base URL.
+async function startServer(t, env = {}) {
   const port = await freePort();
   const serverPath = path.join(__dirname, '..', 'src', 'server.js');
   const child = spawn(process.execPath, [serverPath], {
-    env: { ...process.env, PORT: String(port) },
+    env: { ...process.env, ...env, PORT: String(port) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   t.after(() => child.kill());
@@ -41,8 +42,40 @@ test('server listens on PORT and serves /health', async (t) => {
       reject(new Error(`server exited early with code ${code}`));
     });
   });
+  return `http://127.0.0.1:${port}`;
+}
 
-  const res = await fetch(`http://127.0.0.1:${port}/health`);
+test('server listens on PORT and serves /health', async (t) => {
+  const base = await startServer(t);
+  const res = await fetch(`${base}/health`);
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), { status: 'ok' });
+});
+
+test('ORCA_DASHBOARD=ON enables the dashboard; a missing ORCA_CLI reports unavailable', async (t) => {
+  const missingCli = path.join(__dirname, 'no-such-orca-cli');
+  const base = await startServer(t, { ORCA_DASHBOARD: 'ON', ORCA_CLI: missingCli });
+
+  const flags = await fetch(`${base}/api/features`);
+  assert.deepEqual(await flags.json(), { orcaDashboard: { enabled: true } });
+
+  const page = await fetch(`${base}/dashboard`);
+  assert.equal(page.status, 200);
+  assert.match(page.headers.get('content-type'), /text\/html/);
+
+  const runs = await fetch(`${base}/api/orca/runs`);
+  assert.equal(runs.status, 200);
+  const body = await runs.json();
+  assert.equal(body.source, 'unavailable');
+  assert.equal(typeof body.error, 'string');
+  assert.deepEqual(body.runs, []);
+
+  assert.equal((await fetch(`${base}/health`)).status, 200);
+});
+
+test('ORCA_DASHBOARD=off keeps the dashboard disabled', async (t) => {
+  const base = await startServer(t, { ORCA_DASHBOARD: 'off' });
+  const page = await fetch(`${base}/dashboard`);
+  assert.equal(page.status, 404);
+  assert.deepEqual(await page.json(), { error: 'orca dashboard is disabled' });
 });

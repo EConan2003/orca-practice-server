@@ -1,15 +1,37 @@
 'use strict';
 
 const express = require('express');
+const {
+  parseFlag,
+  createFeatures,
+  createFeaturesRouter,
+  requireOrcaDashboard,
+} = require('./features');
+const { createOrcaRunner } = require('./orca/runner');
+const { createOrcaService } = require('./orca/service');
+const { createOrcaRouter } = require('./orca/router');
 
-// Builds an Express app with its own in-memory item store.
+// Builds an Express app with its own in-memory item store and feature flags.
 // Each call returns an independent app, so tests don't share state.
-function createApp() {
+//
+// options.orcaDashboard  initial flag state (default: parsed from ORCA_DASHBOARD)
+// options.orcaRunner     (cmd, args) => Promise<result>; default runs the Orca CLI
+function createApp(options = {}) {
   const app = express();
   const items = [];
   let nextId = 1;
 
+  // The PUT loopback check reads the socket address; never trust forwarding headers.
+  app.set('trust proxy', false);
   app.use(express.json());
+
+  const features = createFeatures({
+    orcaDashboard:
+      typeof options.orcaDashboard === 'boolean'
+        ? options.orcaDashboard
+        : parseFlag(process.env.ORCA_DASHBOARD),
+  });
+  const orca = createOrcaService({ runner: options.orcaRunner || createOrcaRunner() });
 
   app.get('/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
@@ -28,6 +50,14 @@ function createApp() {
     items.push(item);
     return res.status(201).json(item);
   });
+
+  app.use(createFeaturesRouter(features));
+
+  // Every /dashboard and /api/orca/* request is gated on the flag, checked per request.
+  const gate = requireOrcaDashboard(features);
+  app.use('/dashboard', gate);
+  app.use('/api/orca', gate);
+  app.use(createOrcaRouter(orca));
 
   // All responses are JSON, including unknown routes and errors.
   app.use((req, res) => {
