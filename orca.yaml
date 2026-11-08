@@ -1,0 +1,5 @@
+# Orca repo config. The setup hook runs when a worktree is created with --setup run.
+# It installs dependencies only once a lockfile exists (before B1 merges there is none).
+# Written as one `node -e` call so it works in sh, cmd and PowerShell alike.
+scripts:
+  setup: node -e "const fs=require('fs');if(fs.existsSync('package-lock.json')){require('child_process').execSync('npm ci',{stdio:'inherit'})}else{console.log('no package-lock.json yet; skipping npm ci')}"
