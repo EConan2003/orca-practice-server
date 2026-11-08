@@ -130,7 +130,7 @@ describe('createOrcaRunner', () => {
   });
 
   test('only read-only commands are allowed', () => {
-    assert.deepEqual(Object.keys(ALLOWED).sort(), ['gate-list', 'inbox', 'run-list', 'run-show', 'task-list', 'worker-list']);
+    assert.deepEqual(Object.keys(ALLOWED).sort(), ['gate-list', 'inbox', 'run-list', 'run-show', 'task-list', 'worker-list', 'worker-read']);
   });
 
   const refused = [
